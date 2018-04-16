@@ -31,17 +31,51 @@
 - (id)displayValueFromMetadataItem:(AVMetadataItem *)item {
     
     // Listing 3.14
+    NSNumber *number = nil;
+    NSNumber *count = nil;
+    if ([item.value isKindOfClass:[NSString class]]) {
+        NSArray *components = [(NSString *)item.value componentsSeparatedByString:@"/"];
+        number = @([components.firstObject integerValue]);
+        count = @([components.lastObject integerValue]);
+    } else if ([item.value isKindOfClass:[NSData class]]) {
+        NSData *data = (NSData *)item.value;
+        if (data.length == 6) {
+            uint16_t *value = (uint16_t *)[data bytes];
+            if (value[1] > 0) {
+                number = @(CFSwapInt16BigToHost(value[1]));//转换成小端序
+            }
+            if (value[2] > 0) {
+                count = @(CFSwapInt16BigToHost(value[2]));
+            }
+        }
+    }
     
-    
-    return nil;
+    NSMutableDictionary *dic = [NSMutableDictionary dictionaryWithCapacity:2];
+    [dic setObject:number ?: [NSNull null] forKey:THMetadataKeyDiscNumber];
+    [dic setObject:count ?: [NSNull null] forKey:THMetadataKeyDiscCount];
+    return [dic copy];
 }
 
 - (AVMetadataItem *)metadataItemFromDisplayValue:(id)value
                                 withMetadataItem:(AVMetadataItem *)item {
     
     // Listing 3.14
+    AVMutableMetadataItem *otherItem = [item mutableCopy];
+    NSDictionary *dic = (NSDictionary *)value;
     
-    return nil;
+    NSNumber *number = dic[THMetadataKeyDiscNumber];
+    NSNumber *count = dic[THMetadataKeyDiscCount];
+    uint16_t values[3] = {0};
+    if (number && ![number isKindOfClass:[NSNull class]]) {
+        values[1] = CFSwapInt16HostToBig([number unsignedIntegerValue]);
+    }
+    if (number && ![number isKindOfClass:[NSNull class]]) {
+        values[2] = CFSwapInt16HostToBig([count unsignedIntegerValue]);
+    }
+    
+    NSData *data = [NSData dataWithBytes:values length:sizeof(values)];
+    otherItem.value = data;
+    return otherItem;
 }
 
 @end

@@ -38,7 +38,7 @@
                                 withMetadataItem:(AVMetadataItem *)item {
     
     // Listing 3.10
-    AVMutableMetadataItem *otherItem = [AVMutableMetadataItem mutableCopy];
+    AVMutableMetadataItem *otherItem = [item mutableCopy];
     otherItem.value = value;
     return item;
 }

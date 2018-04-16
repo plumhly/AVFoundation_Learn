@@ -120,24 +120,55 @@
 
     // Listing 3.7
     NSString *normalKey = _keyMapping[key];
-    id <THMetadataConverter> convert = [_converterFactory converterForKey:normalKey];
-    id value = [convert displayValueFromMetadataItem:item];
-    if ([value isKindOfClass:[NSDictionary class]]) {
-        NSDictionary *data = (NSDictionary *)value;
-        for (NSString *key in data) {
-            [self setValue:data[key] forKey:key];
+    if (normalKey) {
+        id <THMetadataConverter> convert = [_converterFactory converterForKey:normalKey];
+        id value = [convert displayValueFromMetadataItem:item];
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            NSDictionary *data = (NSDictionary *)value;
+            for (NSString *key in data) {
+                [self setValue:data[key] forKey:key];
+            }
+        } else {
+            [self setValue:value forKey:normalKey];
         }
-    } else {
-        [self setValue:value forKey:normalKey];
+        self.metadata[normalKey] = item;
     }
-    self.metadata[normalKey] = item;
 }
 
 - (NSArray *)metadataItems {
 
     // Listing 3.16
+    NSMutableArray *items = [NSMutableArray array];
     
-    return nil;
+    [self addMetadataItemFromNumber:self.trackNumber count:self.trackCount numberkey:THMetadataKeyTrackNumber countKey:THMetadataKeyTrackCount toArray:items];
+    
+    [self addMetadataItemFromNumber:self.discNumber count:self.discCount numberkey:THMetadataKeyDiscNumber countKey:THMetadataKeyDiscCount toArray:items];
+    NSMutableDictionary *metaDic = [self.metadata mutableCopy];
+    [metaDic removeObjectsForKeys:@[THMetadataKeyTrackNumber, THMetadataKeyDiscNumber]];
+    
+    for (NSString *key in metaDic) {
+        id <THMetadataConverter> converter = [self.converterFactory converterForKey:key];
+        id value = [self valueForKey:key];
+        AVMetadataItem *sourceItem = metaDic[key];
+        AVMetadataItem *item = [converter metadataItemFromDisplayValue:value withMetadataItem:sourceItem];
+        if (item) {
+            [items addObject:item];
+        }
+    }
+    
+    return [items copy];
+}
+
+- (void)addMetadataItemFromNumber:(NSNumber *)number count:(NSNumber *)count numberkey:(NSString *)numberKey countKey:(NSString *)countKey toArray:(NSMutableArray *)items {
+    id <THMetadataConverter> converter = [self.converterFactory converterForKey:numberKey];
+    NSDictionary *data = @{numberKey: number ?: [NSNull null],
+                           countKey: count ?: [NSNull null]
+                           };
+    AVMetadataItem *sourceItem = self.metadata[numberKey];
+    AVMetadataItem *item = [converter metadataItemFromDisplayValue:data withMetadataItem:sourceItem];
+    if (item) {
+        [items addObject:items];
+    }
 }
 
 @end
