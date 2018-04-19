@@ -31,6 +31,7 @@
 #import "AVAsset+THAdditions.h"
 #import "UIAlertView+THAdditions.h"
 #import "THNotifications.h"
+#import "THThumbnail.h"
 
 // AVPlayerItem's status property
 #define STATUS_KEYPATH @"status"
@@ -55,8 +56,7 @@ static const NSString *PlayerItemStatusContext;
 @property (nonatomic, strong) id itemEndObserver;
 @property (nonatomic, assign) float lastPlayBackRate;
 
-
-// Listing 4.4
+@property (nonatomic, strong) AVAssetImageGenerator *imageGenerator;
 
 @end
 
@@ -79,9 +79,8 @@ static const NSString *PlayerItemStatusContext;
 - (void)prepareToPlay {
 
     // Listing 4.6
-    NSArray *keys = @[@"tracks", @"duration", @"commonMetadata"];
+    NSArray *keys = @[@"tracks", @"duration", @"commonMetadata", @"availableMediaCharacteristicsWithMediaSelectionOptions"];
     _playerItem = [AVPlayerItem playerItemWithAsset:_asset automaticallyLoadedAssetKeys:keys];
-    
     [_playerItem addObserver:self forKeyPath:STATUS_KEYPATH options:0 context:&PlayerItemStatusContext];
     _player = [AVPlayer playerWithPlayerItem:_playerItem];
     _playerView = [[THPlayerView alloc] initWithPlayer:_player];
@@ -107,12 +106,15 @@ static const NSString *PlayerItemStatusContext;
                 [self->_transport setCurrentTime:CMTimeGetSeconds(kCMTimeZero) duration:CMTimeGetSeconds(duration)];
                 [self->_transport setTitle:self.asset.title];
                 [self.player play];
+                [self generateThumbnails];
+                [self loadMediaOptions];
             } else {
                 [UIAlertController alertControllerWithTitle:@"Error" message:@"Failed to load vedio" preferredStyle: UIAlertControllerStyleAlert];
             }
         });
     }
 }
+
 
 #pragma mark - Time Observers
 
@@ -158,7 +160,7 @@ static const NSString *PlayerItemStatusContext;
 - (void)dealloc {
     if (_itemEndObserver) {
         [[NSNotificationCenter defaultCenter] removeObserver:_itemEndObserver];
-        _timeObserver = nil;
+        _itemEndObserver = nil;
     }
 }
 
@@ -167,42 +169,52 @@ static const NSString *PlayerItemStatusContext;
 - (void)play {
 
     // Listing 4.10
-    
+    [self.player play];
 }
 
 - (void)pause {
 
     // Listing 4.10
-    
+    self.lastPlayBackRate = self.player.rate;
+    [self.player pause];
 }
 
 - (void)stop {
 
     // Listing 4.10
-    
+    self.player.rate = 0;
+    [self.transport playbackComplete];
 }
 
 - (void)jumpedToTime:(NSTimeInterval)time {
 
     // Listing 4.10
-    
+    [self.player seekToTime:CMTimeMakeWithSeconds(time, NSEC_PER_SEC)];
 }
 
 - (void)scrubbingDidStart {
 
     // Listing 4.11
+    self.lastPlayBackRate = self.player.rate;
+    [self.player pause];
+    [self.player removeTimeObserver:_timeObserver];
+    _timeObserver = nil;
 }
 
 - (void)scrubbedToTime:(NSTimeInterval)time {
 
     // Listing 4.11
-    
+    [self.playerItem cancelPendingSeeks];
+    [self.player seekToTime:CMTimeMakeWithSeconds(time, NSEC_PER_SEC)];
 }
 
 - (void)scrubbingDidEnd {
 
     // Listing 4.11
-    
+    [self addPlayerItemTimeObserver];
+    if (self.lastPlayBackRate > 0) {
+        [self.player play];
+    }
 }
 
 
@@ -211,19 +223,74 @@ static const NSString *PlayerItemStatusContext;
 - (void)generateThumbnails {
 
     // Listing 4.14
-
+    self.imageGenerator = [AVAssetImageGenerator assetImageGeneratorWithAsset:self.asset];
+    self.imageGenerator.maximumSize = CGSizeMake(200, 0);
+    CMTime duration = self.asset.duration;
+    
+    NSMutableArray *times = [NSMutableArray array];
+    CMTimeValue inscrement = duration.value / 20;
+    CMTimeValue currentTime = kCMTimeZero.value;
+    while (currentTime <= duration.value) {
+        CMTime time = CMTimeMake(currentTime, duration.timescale);
+        NSValue *value = [NSValue valueWithCMTime:time];
+        [times addObject:value];
+        currentTime += inscrement;
+    }
+    
+    NSMutableArray *images = [NSMutableArray array];
+    __block NSInteger count = times.count;
+    
+    [self.imageGenerator generateCGImagesAsynchronouslyForTimes:times completionHandler:^(CMTime requestedTime, CGImageRef  _Nullable image, CMTime actualTime, AVAssetImageGeneratorResult result, NSError * _Nullable error) {
+        if (result == AVAssetImageGeneratorSucceeded) {
+            UIImage *img = [UIImage imageWithCGImage:image];
+            id thumbnail = [THThumbnail thumbnailWithImage:img time:actualTime];
+            [images addObject:thumbnail];
+        } else {
+            NSLog(@"Failed to create thumbnail");
+        }
+        
+        if (--count == 0) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[NSNotificationCenter defaultCenter] postNotificationName:THThumbnailsGeneratedNotification object:images];
+            });
+        }
+    }];
+    
 }
 
 
 - (void)loadMediaOptions {
 
     // Listing 4.16
+    NSString *mc = AVMediaCharacteristicLegible;
+    AVMediaSelectionGroup *group = [self.asset mediaSelectionGroupForMediaCharacteristic:mc];
+    if (group) {
+        NSMutableArray *subtitles = [NSMutableArray array];
+        for (AVMediaSelectionOption *option in group.options) {
+            [subtitles addObject:option.displayName];
+        }
+        [self.transport setSubtitles:subtitles];
+    } else {
+        [self.transport setSubtitles:nil];
+    }
     
 }
 
 - (void)subtitleSelected:(NSString *)subtitle {
 
     // Listing 4.17
+    AVMediaSelectionGroup *group = [self.asset mediaSelectionGroupForMediaCharacteristic:AVMediaCharacteristicLegible];
+    BOOL isSelect = NO;
+    for (AVMediaSelectionOption *option in group.options) {
+        if ([option.displayName isEqualToString:subtitle]) {
+            [self.playerItem selectMediaOption:option inMediaSelectionGroup:group];
+            isSelect = YES;
+        }
+    }
+    
+    if (!isSelect) {
+        [_playerItem selectMediaOption:nil inMediaSelectionGroup:group];
+    }
     
 }
 
