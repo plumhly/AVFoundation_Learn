@@ -54,7 +54,7 @@ static const NSString *PlayerItemStatusContext;
 
 @property (nonatomic, strong) id timeObserver;
 @property (nonatomic, strong) id itemEndObserver;
-@property (nonatomic, assign) float lastPlayBackRate;
+@property (nonatomic, assign) float lastPlaybackRate;
 
 @property (nonatomic, strong) AVAssetImageGenerator *imageGenerator;
 
@@ -175,7 +175,7 @@ static const NSString *PlayerItemStatusContext;
 - (void)pause {
 
     // Listing 4.10
-    self.lastPlayBackRate = self.player.rate;
+    self.lastPlaybackRate = self.player.rate;
     [self.player pause];
 }
 
@@ -195,7 +195,7 @@ static const NSString *PlayerItemStatusContext;
 - (void)scrubbingDidStart {
 
     // Listing 4.11
-    self.lastPlayBackRate = self.player.rate;
+    self.lastPlaybackRate = self.player.rate;
     [self.player pause];
     [self.player removeTimeObserver:_timeObserver];
     _timeObserver = nil;
@@ -212,7 +212,7 @@ static const NSString *PlayerItemStatusContext;
 
     // Listing 4.11
     [self addPlayerItemTimeObserver];
-    if (self.lastPlayBackRate > 0) {
+    if (self.lastPlaybackRate > 0) {
         [self.player play];
     }
 }
