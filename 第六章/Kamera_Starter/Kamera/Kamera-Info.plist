@@ -6,6 +6,10 @@
 	<string>是否允许使用照相机</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>是否允许使用内置麦克风</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>是否允许使用访问相册</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>是否允许使用访问相册</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
