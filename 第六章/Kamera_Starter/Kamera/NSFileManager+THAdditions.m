@@ -27,6 +27,7 @@
 
 @implementation NSFileManager (THAdditions)
 
+///templateString必须包含 XXXXXX,
 - (NSString *)temporaryDirectoryWithTemplateString:(NSString *)templateString {
 
     NSString *mkdTemplate =
@@ -38,7 +39,7 @@
 
     NSString *directoryPath = nil;
 
-    char *result = mkdtemp(buffer);
+    char *result = mkdtemp(buffer);//后面的"XXXXXX"生成唯一随机6个字母
     if (result) {
         directoryPath = [self stringWithFileSystemRepresentation:buffer
                                                           length:strlen(result)];
