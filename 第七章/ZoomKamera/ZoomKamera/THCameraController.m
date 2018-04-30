@@ -37,8 +37,14 @@ static const NSString *THRampingVideoZoomFactorContext;
 - (BOOL)setupSessionInputs:(NSError **)error {
 
     // Listing 7.4
+    BOOL success = [super setupSessionInputs:error];
+    if (success) {
+        
+        [self.activeCamera addObserver:self forKeyPath:@"videoZoomFactor" options:0 context:&THRampingVideoZoomFactorContext];
+        [self.activeCamera addObserver:self forKeyPath:@"rampingVideoZoom" options:0 context:&THRampingVideoZoomContext];
+    }
 
-    return NO;
+    return success;
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath
@@ -47,13 +53,24 @@ static const NSString *THRampingVideoZoomFactorContext;
 					   context:(void *)context {
 
     // Listing 7.4
-
+    if (context == &THRampingVideoZoomContext) {
+        [self updateZoomingDelegate];
+    } else if (context == &THRampingVideoZoomFactorContext) {
+        if (self.activeCamera.isRampingVideoZoom) {
+            [self updateZoomingDelegate];
+        }
+    } else {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+    }
 }
 
 - (void)updateZoomingDelegate {
 
     // Listing 7.4
-
+    CGFloat currentZoom = self.activeCamera.videoZoomFactor;
+    CGFloat maxZoom = [self maxZoomFactor];
+    CGFloat value = log(currentZoom) / log(maxZoom);
+    [self.zoomingDelegate rampedZoomToValue:value];
 }
 
 - (BOOL)cameraSupportsZoom {
@@ -90,12 +107,27 @@ static const NSString *THRampingVideoZoomFactorContext;
 - (void)rampZoomToValue:(CGFloat)zoomValue {
 
     // Listing 7.3
-
+    CGFloat zoomFactor = pow([self maxZoomFactor], zoomValue);
+    AVCaptureDevice *device = self.activeCamera;
+    NSError *error = nil;
+    if ([device lockForConfiguration:&error]) {
+        [device rampToVideoZoomFactor:zoomFactor withRate:THZoomRate];
+        [device unlockForConfiguration];
+    } else {
+        [self.delegate deviceConfigurationFailedWithError:error];
+    }
 }
 
 - (void)cancelZoom {
 
     // Listing 7.3
+    NSError *error = nil;
+    if ([self.activeCamera lockForConfiguration:&error]) {
+        [self.activeCamera cancelVideoZoomRamp];
+        [self.activeCamera unlockForConfiguration];
+    } else {
+        [self.delegate deviceConfigurationFailedWithError:error];
+    }
 
 }
 
