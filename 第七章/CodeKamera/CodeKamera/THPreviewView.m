@@ -110,6 +110,9 @@
         }
         CAShapeLayer *bundsLayer = layers[0];
         bundsLayer.path = [self bezierPathForBounds:obj.bounds].CGPath;
+        
+        CAShapeLayer *cornersLayer = layers[1];
+        cornersLayer.path = [self bezierPathForCorners:obj.corners].CGPath;
         NSLog(@"value: %@", value);
     }
     
@@ -147,6 +150,7 @@
     CAShapeLayer *layer = [CAShapeLayer layer];
     layer.lineWidth = 4;
     layer.strokeColor = [UIColor colorWithRed:0.95 green:0.75 blue:0.06 alpha:1].CGColor;
+    layer.fillColor = nil;
 
     return layer;
 }
@@ -156,8 +160,8 @@
     // Listing 7.20
     CAShapeLayer *layer = [CAShapeLayer layer];
     layer.lineWidth = 2;
-    layer.fillColor = [UIColor colorWithRed:0.172 green:0.671 blue:0.428 alpha:1].CGColor;
-    layer.strokeColor = [UIColor colorWithRed:0.190 green:0.753 blue:0.489 alpha:0.5].CGColor;
+    layer.strokeColor = [UIColor colorWithRed:0.172 green:0.671 blue:0.428 alpha:1].CGColor;
+    layer.fillColor = [UIColor colorWithRed:0.190 green:0.753 blue:0.489 alpha:0.5].CGColor;
 
     return layer;
 }
@@ -165,15 +169,27 @@
 - (UIBezierPath *)bezierPathForCorners:(NSArray *)corners {
 
     // Listing 7.21
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    for (int i = 0; i < corners.count; i++) {
+        CGPoint point = [self pointForCorner:corners[i]];
+        if (i == 0) {
+            [path moveToPoint:point];
+        } else {
+            [path addLineToPoint:point];
+        }
+    }
+    [path closePath];
 
-    return nil;
+    return path;
 }
 
 - (CGPoint)pointForCorner:(NSDictionary *)corner {
 
     // Listing 7.21
+    CGPoint point;
+    CGPointMakeWithDictionaryRepresentation((CFDictionaryRef)corner, &point);
 
-    return CGPointZero;
+    return point;
 }
 
 @end
