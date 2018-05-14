@@ -109,27 +109,104 @@ static NSString *const THVideoFilename = @"movie.mov";
         UIDeviceOrientation orientation = [UIDevice currentDevice].orientation;
         THTransformForDeviceOrientation(orientation);
         
-        NSDictionary *settings = @{
+        NSDictionary *attributes = @{
                                    (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
                                    (id)kCVPixelBufferWidthKey: self.videoSettings[AVVideoWidthKey],
                                    (id)kCVPixelBufferHeightKey: self.videoSettings[AVVideoHeightKey],
-                                   
+                                   (id)kCVPixelFormatOpenGLCompatibility: (id)kCFBooleanTrue
                                    };
         
+        self.assetWriterInputPixelBufferAdaptor = [[AVAssetWriterInputPixelBufferAdaptor alloc] initWithAssetWriterInput:self.assetWriterVideoInput sourcePixelBufferAttributes:attributes];
         
+        if ([self.assetWriter canAddInput:self.assetWriterVideoInput]) {
+            [self.assetWriter addInput:self.assetWriterVideoInput];
+        } else {
+            NSLog(@"add video input error");
+            return;
+        }
+        
+        self.assetWriterAudioInput = [[AVAssetWriterInput alloc] initWithMediaType:AVMediaTypeAudio outputSettings:self.audioSettings];
+        self.assetWriterAudioInput.expectsMediaDataInRealTime = YES;
+        if ([self.assetWriter canAddInput:self.assetWriterAudioInput]) {
+            [self.assetWriter addInput:self.assetWriterAudioInput];
+        } else {
+            NSLog(@"add audio input error");
+            return;
+        }
+        self.firstSample = YES;
+        self.isWriting = YES;
     });
-
 }
 
 - (void)processSampleBuffer:(CMSampleBufferRef)sampleBuffer {
 
     // Listing 8.15
+    if (!self.isWriting) {
+        return;
+    }
+    
+    CMFormatDescriptionRef description = CMSampleBufferGetFormatDescription(sampleBuffer);
+    CMMediaType type = CMFormatDescriptionGetMediaType(description);
+    if (type == kCMMediaType_Video) {
+        CMTime timeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
+        if (self.firstSample) {
+            if ([self.assetWriter startWriting]) {
+                [self.assetWriter startSessionAtSourceTime:timeStamp];
+            } else {
+                NSLog(@"assetWriter start error");
+            }
+            self.firstSample = NO;
+        }
+        
+        CVPixelBufferRef renderBuffer = NULL;
+        CVPixelBufferPoolRef bufferPool = self.assetWriterInputPixelBufferAdaptor.pixelBufferPool;
+        CVReturn result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault,  bufferPool, &renderBuffer);
+        if (result != kCVReturnSuccess) {
+            NSLog(@"CVPixelBufferPoolCreatePixelBuffer error");
+        }
+        
+        CVPixelBufferRef pixref = CMSampleBufferGetImageBuffer(sampleBuffer);
+        CIImage *image = [CIImage imageWithCVPixelBuffer:pixref];
+        [self.activeFilter setValue:image forKey:kCIInputImageKey];
+        CIImage *souceImage = self.activeFilter.outputImage;
+        if (!souceImage) {
+            souceImage = image;
+        }
+        [self.ciContext render:souceImage toCVPixelBuffer:renderBuffer bounds:souceImage.extent colorSpace:self.colorSpace];
+        if (self.assetWriterVideoInput.isReadyForMoreMediaData) {
+            if (![self.assetWriterInputPixelBufferAdaptor appendPixelBuffer:renderBuffer withPresentationTime:timeStamp]) {
+                NSLog(@"assetWriterInputPixelBufferAdaptor appendPixelBuffer error");
+            }
+        }
+        CVPixelBufferRelease(renderBuffer);
+    } else if (!self.firstSample && type == kCMMediaType_Audio) {
+        if (self.assetWriterAudioInput.isReadyForMoreMediaData) {
+            if ([self.assetWriterAudioInput appendSampleBuffer:sampleBuffer]) {
+                NSLog(@"assetWriterAudioInput appendSampleBuffer error");
+            }
+        }
+    }
 
 }
 
 - (void)stopWriting {
 
     // Listing 8.16
+    self.isWriting = NO;
+    dispatch_async(self.dispatchQueue, ^{
+        [self.assetWriter finishWritingWithCompletionHandler:^{
+            if (self.assetWriter.status == AVAssetWriterStatusCompleted) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSURL *url = self.assetWriter.outputURL;
+                    if ([self.delegate respondsToSelector:@selector(didWriteMovieAtURL:)]) {
+                        [self.delegate didWriteMovieAtURL:url];
+                    }
+                });
+            } else {
+                NSLog(@"write asset error: %@", self.assetWriter.error);
+            }
+        }];
+    });
     
 }
 
