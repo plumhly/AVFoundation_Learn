@@ -40,9 +40,11 @@
         } else {
             data = [self readAudioSamplesFromAsset:asset];
         }
-        if (completionBlock) {
-            completionBlock(data);
-        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completionBlock) {
+                completionBlock(data);
+            }
+        });
     }];
 
 }

@@ -89,12 +89,52 @@ static const CGFloat THHeightScaling = 0.85;
 - (void)setAsset:(AVAsset *)asset {
 
     // Listing 8.7
-
+    if (_asset != asset) {
+        _asset = asset;
+        [THSampleDataProvider loadAudioSamplesFromAsset:asset completionBlock:^(NSData *data) {
+            self.filter = [[THSampleDataFilter alloc] initWithData:data];
+            [_loadingView stopAnimating];
+            [self setNeedsDisplay];
+        }];
+    }
 }
 
 - (void)drawRect:(CGRect)rect {
 
     // Listing 8.8
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGContextScaleCTM(context, THWidthScaling, THHeightScaling);
+    CGFloat offsetX = self.bounds.size.width - self.bounds.size.width * THWidthScaling;
+    CGFloat offsetY = self.bounds.size.height - self.bounds.size.height * THHeightScaling;
+    CGContextTranslateCTM(context, offsetX / 2, offsetY / 2);
+    
+    NSArray *filterSamples = [_filter filteredSamplesForSize:self.bounds.size];
+    
+    CGFloat midY = CGRectGetMidY(rect);
+    
+    CGMutablePathRef halfPath = CGPathCreateMutable();
+    CGPathMoveToPoint(halfPath, NULL, 0, midY);
+    
+    for (NSUInteger i = 0; i < filterSamples.count; i++) {
+        float sample = [filterSamples[i] floatValue];
+        CGPathAddLineToPoint(halfPath, NULL, i, midY - sample);
+    }
+    CGPathAddLineToPoint(halfPath, NULL, filterSamples.count, midY);
+    
+    CGMutablePathRef fullPath = CGPathCreateMutable();
+    CGPathAddPath(fullPath, NULL, halfPath);
+    
+    CGAffineTransform transform = CGAffineTransformIdentity;
+    transform = CGAffineTransformTranslate(transform, 0, CGRectGetHeight(rect));
+    transform = CGAffineTransformScale(transform, 1, -1);
+    CGPathAddPath(fullPath, &transform, halfPath);
+    
+    CGContextAddPath(context, fullPath);
+    CGContextSetFillColorWithColor(context, self.waveColor.CGColor);
+    CGContextDrawPath(context, kCGPathFill);
+    
+    CGPathRelease(halfPath);
+    CGPathRelease(fullPath);
 
 }
 
