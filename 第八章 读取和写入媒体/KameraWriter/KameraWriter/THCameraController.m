@@ -29,12 +29,13 @@
 #import <AssetsLibrary/AssetsLibrary.h>
 
 @interface THCameraController () <AVCaptureVideoDataOutputSampleBufferDelegate,
-                                  AVCaptureAudioDataOutputSampleBufferDelegate>
+                                  AVCaptureAudioDataOutputSampleBufferDelegate, THMovieWriterDelegate>
 
 @property (strong, nonatomic) AVCaptureVideoDataOutput *videoDataOutput;
 @property (strong, nonatomic) AVCaptureAudioDataOutput *audioDataOutput;
 
 // Listing 8.17
+@property (nonatomic, strong) THMovieWriter *movieWriter;
 
 @end
 
@@ -62,7 +63,12 @@
     }
 
     // Listing 8.17
+    AVFileType type = AVFileTypeQuickTimeMovie;
+    NSDictionary *videoSettings = [self.videoDataOutput recommendedVideoSettingsForAssetWriterWithOutputFileType:type];
+    NSDictionary *audioSettings = [self.audioDataOutput recommendedAudioSettingsForAssetWriterWithOutputFileType:type];
+    self.movieWriter = [[THMovieWriter alloc] initWithVideoSettings:videoSettings audioSettings:audioSettings dispatchQueue:self.dispatchQueue];
 
+    self.movieWriter.delegate = self;
     return YES;
 }
 
@@ -76,13 +82,15 @@
 - (void)startRecording {
 
     // Listing 8.17
-
+    [_movieWriter startWriting];
+    self.recording = YES;
 }
 
 - (void)stopRecording {
 
     // Listing 8.17
-
+    [_movieWriter stopWriting];
+    self.recording = NO;
 }
 
 
@@ -100,12 +108,22 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     }
 
     // Listing 8.17
+    [self.movieWriter processSampleBuffer:sampleBuffer];
 }
 
 - (void)didWriteMovieAtURL:(NSURL *)outputURL {
 
     // Listing 8.17
-    
+    ALAssetsLibrary *library = [[ALAssetsLibrary alloc] init];
+    if ([library videoAtPathIsCompatibleWithSavedPhotosAlbum:outputURL]) {
+        [library writeVideoAtPathToSavedPhotosAlbum:outputURL completionBlock:^(NSURL *assetURL, NSError *error) {
+            if (error) {
+                if ([self.delegate respondsToSelector:@selector(assetLibraryWriteFailedWithError:)]) {
+                    [self.delegate assetLibraryWriteFailedWithError:error];
+                }
+            }
+        }];
+    }
 }
 
 @end

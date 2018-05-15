@@ -90,6 +90,7 @@ static NSString *const THVideoFilename = @"movie.mov";
 - (void)filterChanged:(NSNotification *)notification {
 
     // Listing 8.13
+    self.activeFilter = [notification.object copy];
 
 }
 
@@ -107,7 +108,7 @@ static NSString *const THVideoFilename = @"movie.mov";
         self.assetWriterVideoInput.expectsMediaDataInRealTime = YES;
         
         UIDeviceOrientation orientation = [UIDevice currentDevice].orientation;
-        THTransformForDeviceOrientation(orientation);
+        self.assetWriterVideoInput.transform = THTransformForDeviceOrientation(orientation);
         
         NSDictionary *attributes = @{
                                    (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
@@ -163,6 +164,7 @@ static NSString *const THVideoFilename = @"movie.mov";
         CVReturn result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault,  bufferPool, &renderBuffer);
         if (result != kCVReturnSuccess) {
             NSLog(@"CVPixelBufferPoolCreatePixelBuffer error");
+            return;
         }
         
         CVPixelBufferRef pixref = CMSampleBufferGetImageBuffer(sampleBuffer);
@@ -181,7 +183,7 @@ static NSString *const THVideoFilename = @"movie.mov";
         CVPixelBufferRelease(renderBuffer);
     } else if (!self.firstSample && type == kCMMediaType_Audio) {
         if (self.assetWriterAudioInput.isReadyForMoreMediaData) {
-            if ([self.assetWriterAudioInput appendSampleBuffer:sampleBuffer]) {
+            if (![self.assetWriterAudioInput appendSampleBuffer:sampleBuffer]) {
                 NSLog(@"assetWriterAudioInput appendSampleBuffer error");
             }
         }
