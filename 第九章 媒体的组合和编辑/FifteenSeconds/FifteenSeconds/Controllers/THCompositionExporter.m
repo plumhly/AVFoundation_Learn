@@ -46,12 +46,30 @@
 - (void)beginExport {
 
     // Listing 9.9
-
+    self.exportSession = [_composition makeExportable];
+    self.exportSession.outputURL = [self exportURL];
+    self.exportSession.outputFileType = AVFileTypeMPEG4;
+    [self.exportSession exportAsynchronouslyWithCompletionHandler:^{
+        if (self.exportSession.status == AVAssetExportSessionStatusCompleted) {
+            [self writeExportedVideoToAssetsLibrary];
+        }
+    }];
+    self.exporting = YES;
+    [self monitorExportProgress];
 }
 
 - (void)monitorExportProgress {
 
     // Listing 9.10
+    dispatch_time_t delay = dispatch_time(DISPATCH_TIME_NOW, 0.1 * NSEC_PER_SEC);
+    dispatch_after(delay, dispatch_get_main_queue(), ^{
+        if (self.exportSession.status == AVAssetExportSessionStatusExporting) {
+            self.progress = self.exportSession.progress;
+            [self monitorExportProgress];
+        } else {
+            self.exporting = NO;
+        }
+    });
 
     // Listing 9.11
 
@@ -60,6 +78,18 @@
 - (void)writeExportedVideoToAssetsLibrary {
 
     // Listing 9.11
+    ALAssetsLibrary *library = [ALAssetsLibrary new];
+    NSURL *outputURL = self.exportSession.outputURL;
+    if ([library videoAtPathIsCompatibleWithSavedPhotosAlbum:outputURL]) {
+        [library writeVideoAtPathToSavedPhotosAlbum:outputURL completionBlock:^(NSURL *assetURL, NSError *error) {
+            if (error) {
+                NSLog(@"library save error");
+            }
+            [[NSFileManager defaultManager] removeItemAtURL:outputURL error:nil];
+        }];
+    } else {
+        NSLog(@"library cant videoAtPathIsCompatibleWithSavedPhotosAlbum");
+    }
     
 }
 
