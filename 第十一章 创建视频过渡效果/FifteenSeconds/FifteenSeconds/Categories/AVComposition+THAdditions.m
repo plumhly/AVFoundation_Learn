@@ -13,7 +13,6 @@
 
 - (BOOL)writeToFile:(NSString *)path atomically:(BOOL)flag {
     NSDictionary *dictionary = [self dictionaryRepresentation];
-    AVVideoComposition
     return [dictionary writeToFile:path atomically:flag];
 }
 
