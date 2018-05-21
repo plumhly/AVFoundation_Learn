@@ -64,20 +64,68 @@
 - (void)buildCompositionTracks {
 
     // Listing 11.5
-
+    AVMutableCompositionTrack *trackA = [self.composition addMutableTrackWithMediaType:AVMediaTypeVideo preferredTrackID:kCMPersistentTrackID_Invalid];
+    AVMutableCompositionTrack *trackB = [self.composition addMutableTrackWithMediaType:AVMediaTypeVideo preferredTrackID:kCMPersistentTrackID_Invalid];
+    NSArray *tracks = @[trackA, trackB];
+    NSArray *videos = _timeline.videos;
+    CMTime transition = kCMTimeZero;
+    CMTime cursor = kCMTimeZero;
+    for (int i = 0; i < videos.count; i++) {
+        int index = i % 2;
+        AVMutableCompositionTrack *currentTrack = tracks[index];
+        THVideoItem *item = videos[i];
+        if (!THIsEmpty(_timeline.transitions)) {
+            transition = THDefaultTransitionDuration;
+        }
+        AVAssetTrack *track = [item.asset tracksWithMediaType:AVMediaTypeVideo].firstObject;
+        [currentTrack insertTimeRange:item.timeRange ofTrack:track atTime:cursor error:nil];
+        cursor = CMTimeAdd(cursor, item.timeRange.duration);
+        cursor = CMTimeSubtract(cursor, transition);
+    }
+    
+    [self addCompositionTrackOfType:AVMediaTypeAudio withMediaItems:_timeline.voiceOvers];
+    
+    _musicTrack = [self addCompositionTrackOfType:AVMediaTypeAudio withMediaItems:_timeline.musicItems];
 }
 
 - (AVVideoComposition *)buildVideoComposition {
 
     // Listing 11.6
-
-    // Listing 11.8
-
-    // Listing 11.9
-
-    // Listing 11.10
-
-    return nil;
+    AVVideoComposition *videoComposition = [AVVideoComposition videoCompositionWithPropertiesOfAsset:self.composition];
+    NSArray *transitions = [self transitionInstructionsInVideoComposition:videoComposition];
+    
+    for (THTransitionInstructions *instruction in transitions) {
+        CMTimeRange range = instruction.compositionInstruction.timeRange;
+        
+        AVMutableVideoCompositionLayerInstruction *from = instruction.fromLayerInstruction;
+        AVMutableVideoCompositionLayerInstruction *to = instruction.toLayerInstruction;
+        
+        THVideoTransitionType type = instruction.transition.type;
+        if (type == THVideoTransitionTypeDissolve) {
+            // Listing 11.8
+            [from setOpacityRampFromStartOpacity:1.0 toEndOpacity:0.0 timeRange:range];
+        } else if (type == THVideoTransitionTypePush) {
+            // Listing 11.9
+            CGAffineTransform identity = CGAffineTransformIdentity;
+            CGFloat width = videoComposition.renderSize.width;
+            CGAffineTransform fromTransform = CGAffineTransformMakeTranslation(-width, 0);
+             CGAffineTransform toTransform = CGAffineTransformMakeTranslation(width, 0);
+            [from setTransformRampFromStartTransform:identity toEndTransform:fromTransform timeRange:range];
+            
+            [to setTransformRampFromStartTransform:toTransform toEndTransform:identity timeRange:range];
+        } else if (type == THVideoTransitionTypeWipe) {
+            // Listing 11.10
+            CGFloat width = videoComposition.renderSize.width;
+            CGFloat height = videoComposition.renderSize.height;
+            CGRect startRect = CGRectMake(0, 0, width, height);
+            CGRect endRect = CGRectMake(0, height, width, 0);
+            [from setCropRectangleRampFromStartCropRectangle:startRect toEndCropRectangle:endRect timeRange:range];
+        }
+        
+        instruction.compositionInstruction.layerInstructions = @[from, to];
+    }
+    
+    return videoComposition;
 }
 
 // Extract the composition and layer instructions out of the
@@ -86,8 +134,33 @@
 - (NSArray *)transitionInstructionsInVideoComposition:(AVVideoComposition *)vc {
 
     // Listing 11.7
+    NSMutableArray *transitioninstructions = [NSMutableArray array];
+    NSArray *instructions = vc.instructions;
+    int index = 1;
+    for (AVMutableVideoCompositionInstruction *ins in instructions) {
+        if (ins.layerInstructions.count == 2) {
+            THTransitionInstructions *trans = [THTransitionInstructions new];
+            trans.compositionInstruction = ins;
+            trans.fromLayerInstruction = (AVMutableVideoCompositionLayerInstruction *)ins.layerInstructions[1 - index];
+            trans.toLayerInstruction = (AVMutableVideoCompositionLayerInstruction *)ins.layerInstructions[index];
+            index = index == 1 ? 0 : 1;
+            [transitioninstructions addObject:trans];
+        }
+    }
 
-    return nil;
+    NSArray *transitions = [_timeline transitions];
+    if (THIsEmpty(transitions)) {
+        return transitioninstructions;
+    }
+    NSAssert(transitions.count == transitioninstructions.count, @"长度不匹配");
+    
+    for (int i = 0; i < transitions.count; i++) {
+        THTransitionInstructions *trans = transitioninstructions[i];
+        THVideoTransition *t = transitions[i];
+        trans.transition = t;
+    }
+    
+    return transitioninstructions;
 }
 
 - (AVMutableCompositionTrack *)addCompositionTrackOfType:(NSString *)mediaType
